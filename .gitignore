@@ -22,3 +22,6 @@ build/
 # Backups
 *.backup
 *.bak
+
+#skills
+*.skills
