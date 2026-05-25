@@ -1,282 +1,256 @@
 /**
- * database.js - Gerenciamento de IndexedDB
- * Responsável por persistência local de dados
+ * Figurinhas Copa 2026 - IndexedDB Database Management
+ * Persistent local storage for album collection status.
  */
 
-const DB = {
-    dbName: 'FigurinhasDB',
-    version: 1,
-    storeName: 'figurinhas',
-    db: null,
-    figurinhasData: null,
+const DB_NAME = 'FigurinhasCopa2026DB';
+const DB_VERSION = 1;
+const STORE_NAME = 'figurinhas';
 
-    /**
-     * Inicializar IndexedDB
-     */
-    async init() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, this.version);
+let dbInstance = null;
 
-            request.onerror = () => {
-                console.error('Erro ao abrir IndexedDB:', request.error);
-                reject(request.error);
-            };
-
-            request.onsuccess = () => {
-                this.db = request.result;
-                console.log('✅ IndexedDB inicializado');
-                resolve();
-            };
-
-            request.onupgradeneeded = (event) => {
-                const db = event.target.result;
-                
-                // Criar object store se não existir
-                if (!db.objectStoreNames.contains(this.storeName)) {
-                    db.createObjectStore(this.storeName, { keyPath: 'code' });
-                    console.log('✅ Object store criado');
-                }
-            };
-        });
-    },
-
-    /**
-     * Carregar dados de figurinhas do JSON e popular IndexedDB
-     */
-    async loadFigurinhosData() {
-        try {
-            // Buscar JSON
-            const response = await fetch('data/figurinhas.json');
-            this.figurinhasData = await response.json();
-            console.log('✅ Dados de figurinhas carregados');
-
-            // Verificar se já existem dados no IndexedDB
-            const existingCount = await this.countFigurinha();
-            
-            if (existingCount === 0) {
-                console.log('📝 Populando IndexedDB com dados iniciais...');
-                await this.populateInitialData();
-            } else {
-                console.log('✅ Dados já existem no IndexedDB');
-                // Carregar dados existentes
-                await this.loadFromIndexedDB();
-            }
-        } catch (error) {
-            console.error('Erro ao carregar dados:', error);
-            throw error;
-        }
-    },
-
-    /**
-     * Contar total de figurinhas no IndexedDB
-     */
-    async countFigurinha() {
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readonly');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.count();
-
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve(request.result);
-        });
-    },
-
-    /**
-     * Popular IndexedDB com dados iniciais do JSON
-     */
-    async populateInitialData() {
-        const allFigurinha = this.extractAllFigurinha();
-        
-        for (const fig of allFigurinha) {
-            await this.addOrUpdateFigurinha(fig.code, fig.quantity, fig.country, fig.group, fig.page);
-        }
-        
-        console.log(`✅ ${allFigurinha.length} figurinhas adicionadas ao IndexedDB`);
-    },
-
-    /**
-     * Extrair todas as figurinhas do JSON em formato plano
-     */
-    extractAllFigurinha() {
-        const allFigurinha = [];
-        
-        this.figurinhasData.album.pages.forEach(page => {
-            page.groups.forEach(group => {
-                group.countries.forEach(country => {
-                    country.figurinhas.forEach(fig => {
-                        allFigurinha.push({
-                            code: fig.code,
-                            quantity: fig.quantity || 0,
-                            country: country.name,
-                            countryCode: country.code,
-                            group: group.letter,
-                            page: page.id,
-                            pageName: page.name
-                        });
-                    });
-                });
-            });
-        });
-
-        return allFigurinha;
-    },
-
-    /**
-     * Carregar todas as figurinhas do IndexedDB
-     */
-    async loadFromIndexedDB() {
-        const figurinhas = await this.getAllFigurinha();
-        
-        // Atualizar dados na memória
-        this.figurinhasData.album.pages.forEach(page => {
-            page.groups.forEach(group => {
-                group.countries.forEach(country => {
-                    country.figurinhas = country.figurinhas.map(fig => {
-                        const updated = figurinhas.find(f => f.code === fig.code);
-                        return updated ? { code: fig.code, quantity: updated.quantity } : fig;
-                    });
-                });
-            });
-        });
-    },
-
-    /**
-     * Obter todas as figurinhas
-     */
-    async getAllFigurinha() {
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readonly');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.getAll();
-
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve(request.result);
-        });
-    },
-
-    /**
-     * Obter figurinha por código
-     */
-    async getFigurinhaByCode(code) {
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readonly');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.get(code);
-
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve(request.result);
-        });
-    },
-
-    /**
-     * Adicionar ou atualizar figurinha
-     */
-    async addOrUpdateFigurinha(code, quantity, country, group, page) {
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-            
-            const data = {
-                code,
-                quantity,
-                country,
-                group,
-                page,
-                lastUpdated: new Date().toISOString()
-            };
-
-            const request = store.put(data);
-
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => {
-                // Atualizar também na memória
-                this.updateFigurinhInMemory(code, quantity);
-                resolve();
-            };
-        });
-    },
-
-    /**
-     * Incrementar quantidade de figurinha
-     */
-    async incrementFigurinha(code) {
-        const fig = await this.getFigurinhaByCode(code);
-        if (fig) {
-            const newQuantity = fig.quantity + 1;
-            await this.addOrUpdateFigurinha(code, newQuantity, fig.country, fig.group, fig.section);
-            return newQuantity;
-        }
-        return 0;
-    },
-
-    /**
-     * Decrementar quantidade de figurinha
-     */
-    async decrementFigurinha(code) {
-        const fig = await this.getFigurinhaByCode(code);
-        if (fig && fig.quantity > 0) {
-            const newQuantity = fig.quantity - 1;
-            await this.addOrUpdateFigurinha(code, newQuantity, fig.country, fig.group, fig.section);
-            return newQuantity;
-        }
-        return 0;
-    },
-
-    /**
-     * Atualizar figurinha na memória (JSON)
-     */
-    updateFigurinhInMemory(code, quantity) {
-        this.figurinhasData.album.pages.forEach(page => {
-            page.groups.forEach(group => {
-                group.countries.forEach(country => {
-                    country.figurinhas.forEach(fig => {
-                        if (fig.code === code) {
-                            fig.quantity = quantity;
-                        }
-                    });
-                });
-            });
-        });
-    },
-
-    /**
-     * Limpar todos os dados (para import)
-     */
-    async clearAllData() {
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([this.storeName], 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.clear();
-
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => {
-                console.log('✅ IndexedDB limpo');
-                resolve();
-            };
-        });
-    },
-
-    /**
-     * Obter todos os países
-     */
-    getAllCountries() {
-        const countries = [];
-        this.figurinhasData.album.pages.forEach(page => {
-            page.groups.forEach(group => {
-                group.countries.forEach(country => {
-                    if (!countries.some(c => c.code === country.code)) {
-                        countries.push({ code: country.code, name: country.name });
-                    }
-                });
-            });
-        });
-        return countries.sort((a, b) => a.name.localeCompare(b.name));
-    },
-
-    /**
-     * Obter dados estruturados para renderização
-     */
-    getStructuredData() {
-        return this.figurinhasData;
+/**
+ * Initializes the IndexedDB database.
+ * If empty, loads the default data from data/figurinhas.json and populates the DB.
+ */
+function initDB() {
+  return new Promise((resolve, reject) => {
+    if (dbInstance) {
+      return resolve(dbInstance);
     }
-};
+
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onerror = (event) => {
+      console.error('IndexedDB error:', event.target.error);
+      reject(event.target.error);
+    };
+
+    request.onsuccess = (event) => {
+      dbInstance = event.target.result;
+      resolve(dbInstance);
+    };
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'code' });
+      }
+    };
+  });
+}
+
+/**
+ * Loads static figurinhas.json data from the network and flattens it for the database.
+ */
+async function loadDefaultData() {
+  try {
+    const response = await fetch('data/figurinhas.json');
+    if (!response.ok) {
+      throw new Error('Falha ao carregar figurinhas.json padrão');
+    }
+    const data = await response.json();
+    const flattenedList = [];
+
+    // Flatten Section 1: Página Inicial
+    const paginaInicial = data.sections.find(s => s.id === 'pagina-inicial');
+    if (paginaInicial && paginaInicial.figurinhas) {
+      paginaInicial.figurinhas.forEach(f => {
+        flattenedList.push({
+          code: f.code,
+          quantity: f.quantity || 0,
+          sectionId: 'pagina-inicial',
+          sectionName: 'Página Inicial',
+          groupLetter: null,
+          countryCode: null,
+          countryName: null
+        });
+      });
+    }
+
+    // Flatten Section 2: Grupos
+    const grupos = data.sections.find(s => s.id === 'grupos');
+    if (grupos && grupos.groups) {
+      grupos.groups.forEach(g => {
+        const groupLetter = g.letter;
+        g.countries.forEach(c => {
+          const countryCode = c.code;
+          const countryName = c.name;
+          c.figurinhas.forEach(f => {
+            flattenedList.push({
+              code: f.code,
+              quantity: f.quantity || 0,
+              sectionId: 'grupos',
+              sectionName: 'Grupos',
+              groupLetter: groupLetter,
+              countryCode: countryCode,
+              countryName: countryName
+            });
+          });
+        });
+      });
+    }
+
+    // Flatten Section 3: Fifa History
+    const fifaHistory = data.sections.find(s => s.id === 'fifa-history');
+    if (fifaHistory && fifaHistory.figurinhas) {
+      fifaHistory.figurinhas.forEach(f => {
+        flattenedList.push({
+          code: f.code,
+          quantity: f.quantity || 0,
+          sectionId: 'fifa-history',
+          sectionName: 'Fifa World Cup History',
+          groupLetter: null,
+          countryCode: null,
+          countryName: null
+        });
+      });
+    }
+
+    // Flatten Section 4: Coca-Cola
+    const cocaCola = data.sections.find(s => s.id === 'coca-cola');
+    if (cocaCola && cocaCola.figurinhas) {
+      cocaCola.figurinhas.forEach(f => {
+        flattenedList.push({
+          code: f.code,
+          quantity: f.quantity || 0,
+          sectionId: 'coca-cola',
+          sectionName: 'Coca-Cola',
+          groupLetter: null,
+          countryCode: null,
+          countryName: null
+        });
+      });
+    }
+
+    return flattenedList;
+  } catch (error) {
+    console.error('Error fetching/parsing standard JSON data:', error);
+    throw error;
+  }
+}
+
+/**
+ * Returns all stickers from IndexedDB.
+ * If IndexedDB is empty, populates it first with default data.
+ */
+async function getAllFigurinhas() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.getAll();
+
+    request.onsuccess = async () => {
+      let results = request.result;
+      
+      // If DB is brand new or empty, populate with default data
+      if (results.length === 0) {
+        console.log('Database is empty. Loading default stickers database...');
+        try {
+          const defaultList = await loadDefaultData();
+          await populateDatabase(defaultList);
+          resolve(defaultList);
+        } catch (err) {
+          reject(err);
+        }
+      } else {
+        resolve(results);
+      }
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+}
+
+/**
+ * Bulk insert of stickers in a single transaction.
+ */
+async function populateDatabase(stickerList) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+
+    stickerList.forEach(sticker => {
+      store.put(sticker);
+    });
+
+    transaction.oncomplete = () => {
+      console.log(`IndexedDB populated successfully with ${stickerList.length} items.`);
+      resolve();
+    };
+
+    transaction.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+}
+
+/**
+ * Updates the quantity of a single sticker by its code.
+ */
+async function updateStickerQuantity(code, quantity) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    
+    // First get the record to maintain other fields
+    const getRequest = store.get(code);
+    
+    getRequest.onsuccess = () => {
+      const sticker = getRequest.result;
+      if (!sticker) {
+        reject(new Error(`Figurinha com código ${code} não encontrada`));
+        return;
+      }
+      
+      sticker.quantity = Math.max(0, quantity); // Ensure non-negative
+      
+      const putRequest = store.put(sticker);
+      
+      putRequest.onsuccess = () => {
+        resolve(sticker);
+      };
+      
+      putRequest.onerror = (e) => {
+        reject(e.target.error);
+      };
+    };
+    
+    getRequest.onerror = (e) => {
+      reject(e.target.error);
+    };
+  });
+}
+
+/**
+ * Clears the object store and re-populates it with imported backup list.
+ */
+async function clearAndImportDatabase(importedList) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    
+    const clearRequest = store.clear();
+    
+    clearRequest.onsuccess = () => {
+      // Put imported elements in
+      importedList.forEach(sticker => {
+        store.put(sticker);
+      });
+    };
+    
+    transaction.oncomplete = () => {
+      resolve();
+    };
+    
+    transaction.onerror = (e) => {
+      reject(e.target.error);
+    };
+  });
+}

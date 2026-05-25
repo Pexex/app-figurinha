@@ -1,46 +1,44 @@
 /**
- * main.js - Bootstrap da Aplicação
- * Inicializa o app ao carregar
+ * Figurinhas Copa 2026 - Main Bootstrapper
+ * Orchestrates the application startup, data load, and event registrations.
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Iniciando Figurinhas Copa 2026...');
-
-    try {
-        // 1. Inicializar banco de dados
-        console.log('📦 Inicializando IndexedDB...');
-        await DB.init();
-
-        // 2. Carregar dados das figurinhas
-        console.log('📥 Carregando dados de figurinhas...');
-        await DB.loadFigurinhosData();
-
-        // 3. Renderizar grid inicial
-        console.log('🎨 Renderizando interface...');
-        UI.renderFigurinhascarta();
-
-        // 4. Atualizar contador de progresso
-        console.log('📊 Atualizando progresso...');
-        UI.updateProgress();
-
-        // 5. Inicializar handlers de eventos
-        console.log('🎯 Inicializando event handlers...');
-        Handlers.init();
-
-        console.log('✅ App pronto!');
-    } catch (error) {
-        console.error('❌ Erro ao inicializar app:', error);
-        const grid = document.getElementById('figurinhasGrid');
-        grid.innerHTML = `
-            <div class="loading" style="grid-column: 1 / -1; color: red;">
-                ⚠️ Erro ao carregar aplicação.<br>
-                Verifique o console para mais detalhes.
-            </div>
-        `;
+  console.log('Bootstrapping Figurinhas Copa 2026 App...');
+  
+  try {
+    // 1. Load stickers from local IndexedDB (auto-populates with default data if empty)
+    const stickers = await getAllFigurinhas();
+    console.log(`Loaded ${stickers.length} stickers from local storage.`);
+    
+    // 2. Set global state memory
+    setStickersState(stickers);
+    
+    // 3. Initialize all event listeners
+    initializeEventHandlers();
+    
+    // 4. Perform initial rendering of UI grid, dropdowns and metrics
+    refreshCollectionUI();
+    
+    // 5. Show initial success greeting toast
+    showToast('✓ Coleção de figurinhas carregada com sucesso!', 'info');
+    
+  } catch (error) {
+    console.error('Fatal initialization error:', error);
+    
+    // Handle loading state error visual feedback in grid container
+    const gridContainer = document.getElementById('grid-container');
+    if (gridContainer) {
+      gridContainer.innerHTML = `
+        <div class="empty-state">
+          <i class="fa-solid fa-circle-exclamation text-danger" style="font-size: 3rem;"></i>
+          <h3>Falha de Inicialização</h3>
+          <p>Ocorreu um erro ao acessar o banco de dados local. Por favor, recarregue a página.</p>
+        </div>
+      `;
     }
-});
-
-// Garantir que os dados persistem ao recarregar
-window.addEventListener('beforeunload', () => {
-    console.log('💾 Salvando dados antes de fechar...');
+    
+    // Show error toast
+    showToast('❌ Falha ao carregar coleção. Verifique as permissões de armazenamento do seu navegador.', 'error');
+  }
 });
