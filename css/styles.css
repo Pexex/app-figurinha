@@ -345,7 +345,7 @@ h3 {
 
 .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
     gap: var(--spacing-md);
     animation: fadeIn 0.4s ease;
 }
@@ -368,7 +368,7 @@ h3 {
 .figurinha-card {
     background-color: var(--bg-card);
     border-radius: var(--border-radius-sm);
-    padding: 16px 12px;
+    padding: 16px 14px;
     text-align: center;
     box-shadow: var(--shadow);
     transition: var(--transition);
@@ -379,7 +379,7 @@ h3 {
     gap: var(--spacing-sm);
     position: relative;
     overflow: hidden;
-    min-height: 180px;
+    min-height: 200px;
     justify-content: space-between;
 }
 
