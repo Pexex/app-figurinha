@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a472a">
+    <meta name="description" content="Controle de coleção de figurinhas da Copa 2026">
+    <title>Figurinhas Copa 2026</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <h1 class="header-title">🏆 Figurinhas Copa 2026</h1>
+            <div class="header-actions">
+                <button id="scanBtn" class="btn btn-scan" title="Escanear com câmera">
+                    📷 Escanear
+                </button>
+                <button id="downloadBtn" class="btn btn-download" title="Baixar backup">
+                    ⬇️ Download
+                </button>
+                <button id="uploadBtn" class="btn btn-upload" title="Restaurar backup">
+                    ⬆️ Upload
+                </button>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <nav class="filters">
+            <div class="filters-container">
+                <!-- Busca por código -->
+                <div class="filter-group">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        class="filter-input" 
+                        placeholder="🔍 Buscar por código (ex: MEX1)"
+                        autocomplete="off"
+                    >
+                </div>
+
+                <!-- Filtro por Grupo -->
+                <div class="filter-group">
+                    <label for="groupFilter">Grupo:</label>
+                    <select id="groupFilter" class="filter-select">
+                        <option value="">Todos</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                        <option value="D">D</option>
+                        <option value="E">E</option>
+                        <option value="F">F</option>
+                        <option value="G">G</option>
+                        <option value="H">H</option>
+                        <option value="I">I</option>
+                        <option value="J">J</option>
+                        <option value="K">K</option>
+                        <option value="L">L</option>
+                    </select>
+                </div>
+
+                <!-- Filtro por País -->
+                <div class="filter-group">
+                    <label for="countryFilter">País:</label>
+                    <select id="countryFilter" class="filter-select">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+
+                <!-- Filtro por Status -->
+                <div class="filter-group">
+                    <label for="statusFilter">Status:</label>
+                    <select id="statusFilter" class="filter-select">
+                        <option value="">Todos</option>
+                        <option value="faltam">Faltam</option>
+                        <option value="possuo">Possuo</option>
+                        <option value="duplicadas">Duplicadas</option>
+                    </select>
+                </div>
+
+                <!-- Botão Limpar Filtros -->
+                <button id="clearFiltersBtn" class="btn btn-secondary">
+                    Limpar Filtros
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Contador de Progresso -->
+    <section class="progress">
+        <div class="progress-container">
+            <div class="progress-info">
+                <span id="progressText" class="progress-text">0 de 0 figurinhas</span>
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+                </div>
+                <span id="progressPercent" class="progress-percent">0%</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Grid de Figurinhas -->
+    <main class="main-content">
+        <div id="figurinhasGrid" class="grid">
+            <div class="loading">Carregando figurinhas...</div>
+        </div>
+    </main>
+
+    <!-- Modal Câmera -->
+    <div id="cameraModal" class="modal hidden">
+        <div class="modal-content">
+            <button id="closeModalBtn" class="modal-close">✕</button>
+            <h2>Escanear Figurinha</h2>
+            
+            <div class="camera-container">
+                <video id="videoFeed" class="video-feed" autoplay playsinline></video>
+                <canvas id="captureCanvas" class="hidden"></canvas>
+                <div id="ocrResult" class="ocr-result hidden">
+                    <p>Detectado: <strong id="ocrText"></strong></p>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button id="captureBtn" class="btn btn-primary">
+                    📸 Capturar
+                </button>
+                <button id="processBtn" class="btn btn-primary hidden">
+                    🔄 Processando OCR...
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input File (Hidden) -->
+    <input type="file" id="uploadInput" class="hidden" accept=".json" />
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="js/database.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/filters.js"></script>
+    <script src="js/handlers.js"></script>
+    <script src="js/camera-ocr.js"></script>
+    <script src="js/export-import.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
