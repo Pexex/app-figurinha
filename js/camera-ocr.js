@@ -18,8 +18,8 @@ async function initOCRWorker(progressCallback) {
   updateOCRProgress('Preparando processador OCR...', 0.1);
   
   try {
-    // Create local Tesseract Worker
-    tesseractWorker = await Tesseract.createWorker('por', 1, {
+    // Create local Tesseract Worker using 'eng' language (3x smaller than 'por' and extremely accurate for alphanumeric codes)
+    tesseractWorker = await Tesseract.createWorker('eng', 1, {
       logger: (m) => {
         if (m.status === 'recognizing text') {
           updateOCRProgress('Reconhecendo texto...', m.progress);
@@ -29,9 +29,9 @@ async function initOCRWorker(progressCallback) {
       }
     });
     
-    // Set OCR parameters: only look for uppercase letters, numbers, and space
+    // Set OCR parameters: only look for uppercase letters, numbers, and space to prevent casing mismatches
     await tesseractWorker.setParameters({
-      tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ',
+      tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ ',
     });
     
     return tesseractWorker;
@@ -160,20 +160,27 @@ async function captureAndProcessOCR() {
 }
 
 /**
- * Performs greyscale conversion and high-contrast thresholding on captured canvas.
+ * Performs professional greyscale conversion and adaptive contrast stretching on captured canvas.
  */
 function preprocessImageForOCR(ctx, w, h) {
   try {
     const imgData = ctx.getImageData(0, 0, w, h);
     const data = imgData.data;
     for (let i = 0; i < data.length; i += 4) {
-      // Greyscale average
-      const grey = (data[i] + data[i+1] + data[i+2]) / 3;
-      // High contrast threshold: force to pure black or white
-      const v = (grey > 115) ? 255 : 0;
-      data[i] = v;     // R
-      data[i+1] = v;   // G
-      data[i+2] = v;   // B
+      // High-quality luminance greyscale conversion
+      const grey = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+      
+      // Mild contrast stretching to boost font definitions without destroying shapes in variable lighting
+      let contrastValue = grey;
+      if (grey < 100) {
+        contrastValue = Math.max(0, grey - 35);
+      } else if (grey > 150) {
+        contrastValue = Math.min(255, grey + 35);
+      }
+      
+      data[i] = contrastValue;     // R
+      data[i+1] = contrastValue;   // G
+      data[i+2] = contrastValue;   // B
     }
     ctx.putImageData(imgData, 0, 0);
   } catch (e) {
@@ -243,7 +250,8 @@ function parseStickerCode(rawText) {
 
   if (match) {
     let letters = match[1];
-    let digits = match[2];
+    // Strip leading zeros (e.g., "05" -> "5") to match database keys
+    let digits = parseInt(match[2], 10).toString();
     
     // Formulate final code
     let finalCode = `${letters}${digits}`;
@@ -256,20 +264,28 @@ function parseStickerCode(rawText) {
 
   // ADVANCED SMART CORRECTIONS
   // Common mistakes: O instead of 0, I or l instead of 1, S instead of 5, Z instead of 2.
-  // We can try to clean lines
   const lines = cleanText.split('\n');
   for (let line of lines) {
     let words = line.trim().split(/\s+/);
     for (let word of words) {
       // If it looks like [3 letters] + [some characters]
       if (word.length >= 4 && word.length <= 6) {
-        let letters = word.substring(0, 3);
+        let rawLetters = word.substring(0, 3);
         let remainder = word.substring(3);
         
+        // Intelligent spell correction on letters
+        let letters = rawLetters
+          .replace(/8/g, 'B')
+          .replace(/1/g, 'I')
+          .replace(/0/g, 'O')
+          .replace(/5/g, 'S')
+          .replace(/FVC/g, 'FWC');
+        
         // If first 3 chars are letters (e.g. BRA, FWC, MEX, GER, ESP)
-        if (/^[A-Z]{3}$/.test(letters) || letters === 'CC') {
-          if (letters === 'CC') {
+        if (/^[A-Z]{3}$/.test(letters) || letters.substring(0, 2) === 'CC') {
+          if (letters.substring(0, 2) === 'CC') {
             remainder = word.substring(2);
+            letters = 'CC';
           }
           
           // Try corrections on the numbers
@@ -286,7 +302,9 @@ function parseStickerCode(rawText) {
           correctedDigits = correctedDigits.replace(/[^0-9]/g, '');
           
           if (correctedDigits) {
-            let attemptCode = `${letters}${correctedDigits}`;
+            // Strip leading zeros
+            let digits = parseInt(correctedDigits, 10).toString();
+            let attemptCode = `${letters}${digits}`;
             if (validateStickerExists(attemptCode)) {
               return attemptCode;
             }
